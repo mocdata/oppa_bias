@@ -12,6 +12,9 @@ import string
 import pandas as pd 
 from glob import glob
 import re
+from konlpy.tag import Mecab
+from konlpy.tag import Hannanum
+from konlpy.tag import Kkma
 #### Functions shared between obtaining all the words routine and generating the data table routine.
 
 def cleantitle(title):
@@ -24,7 +27,7 @@ def cleaned(words):
 	'''Removes the punctuation and the text formatting i, br and a random heart I found while parsing. 
 	Called: findallmatching, check
 	'''
-	remove=list(string.punctuation+'ibr♥')
+	remove=list(string.punctuation+'♥♬♫'+string.ascii_letters+string.digits)
 	for word in words:
 		newword=''
 		for char in word:
@@ -32,25 +35,31 @@ def cleaned(words):
 				newword=newword+char
 		yield newword
 
+def cleanstring(wordstr):
+	remove=list(string.punctuation+'♥♬♫'+string.ascii_letters+string.digits)
+	newword=''
+	for char in list(wordstr):
+		if char not in remove:
+			newword=newword+char
+	return(newword)
+
 ### obtaining all the words routine
 #### Functions below are unique to grepping the words containing the same characters as oppa and noona.
 def findallmatching(srt):
 	'''This generator iterates over the file and it is lines. Returns the word if it finds oppa or noona. 
 	This is a more simplified version of the check function to find the words regardless of the position.
 	'''
-	remove=list(string.punctuation+'ibr')
 	with open(srt,'r',encoding='utf-8') as fobj:
-		for ind,line in enumerate(fobj):
-			if ind % 3 == 0:
-				words=line.split()
-				for word in cleaned(words):
-					r=False
-					if '오빠' in word: r=True
-					elif '오빤' in word: r=True
-					elif '누나' in word : r=True
-					elif '누난'in word : r=True
-					if r:
-						yield word
+		for line in fobj:
+			words=line.split()
+			for word in cleaned(words):
+				r=False
+				if '오빠' in word: r=True
+				elif '오빤' in word: r=True
+				elif '누나' in word : r=True
+				elif '누난'in word : r=True
+				if r:
+					yield word
 
 
 def uniquewords(cdf):
@@ -60,7 +69,7 @@ def uniquewords(cdf):
 	wordlist=[]
 	for title in cdf['Title']:
 		title=cleantitle(title)
-		srts=glob('%s*.srt' %title)
+		srts=glob('%s_[0-9]*.srt' %title)
 		for srt in srts:
 			for word in  findallmatching(srt):
 				wordlist.append(word)
@@ -118,47 +127,64 @@ def counter(fobj):
 	oppa=0
 	noona=0
 	total=0
-	for ind,line in enumerate(fobj):
-		if ind % 3 == 0:
-			words=[char.strip(string.punctuation) for char in line.split()]
-			for word in cleaned(words):
-				if any(i in word for i in ['누나','누난']):
-					noona+=check(word,noona=True)
-				elif any(i in word for i in ['오빠','오빤']):
-					oppa+=check(word,noona=False)
-			total+=len(words)
+	for line in fobj:
+		words=[char.strip(string.punctuation) for char in line.split()]
+		for word in cleaned(words):
+			if any(i in word for i in ['누나','누난']):
+				noona+=check(word,noona=True)
+			elif any(i in word for i in ['오빠','오빤']):
+				oppa+=check(word,noona=False)
+		total+=len(words)
 	return(oppa,noona,total)
 
-def readcountwords(title):
+def mecab_counter(fobj,method=Mecab()):
+	'''Extracting nouns using Mecab from KoNLPy. Total word count is likely to be different then the other local count.
+	'''
+	oppa=0
+	noona=0
+	total=0
+	for line in fobj:
+		nouns=method.nouns(cleanstring(line))
+		if '오빠' in nouns or '오빤' in nouns:
+			oppa+=1
+		if '누나' in nouns or '누난' in nouns:
+			noona+=1
+		total+=len(nouns)
+	return(oppa,noona,total)
+
+def readcountwords(title,mecab=True,method=Mecab()):
 	'''
 	Finds the srt files matching title name and returns the count found for all the srts.
 	Calls:counter
 	Called:getcountsdrama
 	'''
 	title=cleantitle(title)
-	srts=glob('%s*.srt' %title)
+	srts=glob('%s_[0-9]*.srt' %title)
 	oppatotal=0
 	noonatotal=0
 	allwords=0
 	for srt in srts:
 		f=open(srt,'r',encoding='utf-8')
-		oppa,noona,total=counter(f)
+		if mecab:
+			oppa,noona,total=mecab_counter(f,method=method)
+		else:
+			oppa,noona,total=counter(f)
 		f.close()
 		oppatotal+=oppa
 		noonatotal+=noona
 		allwords+=total
 	return(oppatotal,noonatotal,allwords)
 
-def getcountsdrama(cdf):
+def getcountsdrama(cdf,mecab=True,method=Mecab()):
 	'''Iterates over the titles and returns a new dataframe with the counts.
 	Calls:readcountwords
 	'''
 	counts={'Title':[],'Oppa':[],'Noona':[],'Total':[]}
 	for title in cdf['Title']:
-		oppa,noona,total=readcountwords(title)
+		oppa,noona,total=readcountwords(title,mecab=mecab,method=method)
 		counts['Title'].append(title)
 		counts['Oppa'].append(oppa)
 		counts['Noona'].append(noona)
 		counts['Total'].append(total)
 	counts=pd.DataFrame(counts)
-	return(pd.merge(cdf,counts,on='Title'))
+	return(pd.merge(cdf,counts,on=['Title']))

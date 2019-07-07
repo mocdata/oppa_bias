@@ -13,7 +13,8 @@
 #links=getvikivideolist(df,driver)
 #with open("links.json","w") as f:
 #	json.dump(links,f)
-
+#saved,partial,notsaved=saveallsubs(links)
+#
 
 
 import requests
@@ -24,13 +25,14 @@ import json
 from selenium import webdriver
 import re
 from glob import glob
+import string
 
 namechanges={'Another Miss Oh':'Another Oh Hae Young','Birth of a Beauty':'Birth of the Beauty','Goblin':'Guardian: The Lonely and Great God','Fight For My Way':'Fight My Way',
 			'Goong':'Princess Hours','Item':'The Item','Jealousy Incarnate':"Don't Dare to Dream (Jealousy Incarnate)",'Kill Me, Heal Me':'Kill Me Heal Me',
 			"My Wife’s Having an Affair this Week":'My Wife Is Having an Affair This Week','Remember – War of the Son':'Remember',
 			'Romantic Doctor, Teacher Kim':'Romantic Doctor Kim','Sassy Go Go':'Cheer Up!','The Great Seducer':'Tempted','The Guardians':'The Guardian','The Heirs':'Heirs',
 			"The Master’s Sun":"Master’s Sun","You're All Surrounded":"You're All Surrounded",'Advertising Genius Lee Tae Baek':'AD Genius Lee Tae Baek',
-			'Blade Man':'Iron Man','Flower Boy Ramen Shop':'Flower Boy Ramyun Shop','Goong S':'Prince Hours'}
+			'Blade Man':'Iron Man','Flower Boy Ramen Shop':'Flower Boy Ramyun Shop','Goong S':'Prince Hours','You Who Came From The Stars':'My Love From the Star'}
 
 def parselist(httppath):
 	'''Parses the list from mydrama list site
@@ -180,17 +182,25 @@ def parsevideovikiurl_selenium():
 	last=episodes[-1]
 	if last[-1] == '"':
 		episodes=episodes[:-1]
-	elif '1' in last[-1].split('-')[-1]:
-		episodes=episodes[:-1]
-	return(episodes)
+		last=episodes[-1]
+	filtepisodes=[]
+	for link in episodes:
+		if 'special' not in link:
+			filtepisodes.append(link)
+	return(filtepisodes)
 
 def cleanlinks(episodes):
+	'''If you obtained a list without filtering use this to clean it up.
+	'''
+
 	for key,value in episodes.items():
 		last=value[-1]
 		if last[-1] == '"':
 			episodes[key]=value[:-1]
-		elif '1' in last[-1].split('-')[-1]:
-			episodes[key]=value[:-1]
+	filtepisodes=[]
+	for link in episodes:
+		if 'special' not in link:
+			filtepisodes.append(link)
 	return(episodes)
 
 
@@ -281,9 +291,9 @@ def saveallsubs(vlinks):
 		nr=1
 		for link in links:
 			slink=getsublink(link,title,nr)
-			nr+=1
 			if slink:
 				passed.append(nr)
+			nr+=1
 		if len(links) == len(passed):
 			saved[title]=passed
 		elif len(passed) == 0:
@@ -292,48 +302,6 @@ def saveallsubs(vlinks):
 			partial[title]=passed
 	return(saved,partial,notsaved)
 
+def second_set_most_popular_on_viki():
 
-def counter(fobj):
-	'''The below code naively uses the decoded comparison for words. If problematic we could use unicode comparison.
-	오빠 is oppa, \\uc624\\ube60 . 누나 is noona, \\ub204\\ub098
-	https://www.unicode.org/charts/PDF/UAC00.pdf
-	Issues:Korean language has suffixes and merged words. This function only checks a few of these. Writing a better search function calls for profiency in Korean.
-	'''
-	oppa=0
-	noona=0
-	total=0
-	for ind,line in enumerate(fobj):
-		print(ind)
-		if ind % 3 == 0:
-			words=[char.strip(string.punctuation) for char in line.split()]
-			for word in words:
-				if word in ['오빠','오빠도','오빠는','오빠의']:oppa+=1
-				elif word in ['누나','누나랑','큰누나','누나한테']:noona+=1
-			total+=len(words)
-	return(oppa,noona,total)
 
-def readcountwords(title):
-	title=cleantitle(title)
-	srts=glob('%s*.srt' %title)
-	oppatotal=0
-	noonatotal=0
-	allwords=0
-	for srt in srts:
-		f=open(srt,'r',encoding='utf-8')
-		oppa,noona,total=counter(f)
-		f.close()
-		oppatotal+=oppa
-		noonatotal+=noona
-		allwords+=total
-	return(oppatotal,noonatotal,allwords)
-
-def getcountsdrama(cdf):
-	counts={'Title':[],'Oppa':[],'Noona':[],'Total':[]}
-	for title in cdf['Title']:
-		oppa,noona,total=readcountwords(title)
-		counts['Title'].append(title)
-		counts['Oppa'].append(oppa)
-		counts['Noona'].append(noona)
-		counts['Total'].append(total)
-	counts=pd.DataFrame(counts)
-	return(pd.merge(cdf,counts,on='Title'))
