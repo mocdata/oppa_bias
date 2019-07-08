@@ -1,10 +1,7 @@
-Anything that is not in the srt json file was downloaded using sources below. Examples...
+Anything that is not in the json file was downloaded using sources below. Examples...
 Goblin was downloaded via downsubs
 Ghost, It's Ok, That's Love was downloaded manually.
 
 Some Items have only english subs or access not avaialbe. Examples...
 Item, english subs only. Jealousy Incarnate,Signal no access
-
-
-Special episodes were removed later, there might be one or two dramas with those episodes left.
 

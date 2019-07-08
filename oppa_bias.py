@@ -5,7 +5,7 @@
 #Commands for dramalist
 #df=parselist('https://mydramalist.com/dramalist/cattibrie_fr')
 # One name is problematic in viki, Stranger find and change that to Forest of Strangers
-# df.loc[df[df['Title']=='Stranger'].index[0],'Title'] = 'Forest of Strangers'
+# df.loc[df[df['Title']=='Stranger'].index[0],'Title'] = 'Secret Forest'
 # df.to_csv("mydramas.csv")
 
 #Commands for getting the video links for srt download from viki.
@@ -83,6 +83,8 @@ class MyDramaList():
 			if 'Korean Drama' in title[1]:
 				ctitle=(' '.join(title[1].split()[:-2]))
 				ctitle=re.sub("'","’",ctitle)
+				if ctitle == 'Stranger':
+					ctitle = 'Secret Forest'
 				nitem.append(ctitle)
 				nitem.append(int(title[3]))
 				nitem.append(float(title[5]))
@@ -261,7 +263,7 @@ class VideoList():
 			filtepisodes=[]
 			for link in episodes:
 				ind=int(link.split('-')[-1])
-				if 'special' not in link:
+				if 'special' not in link and 'epilogue' not in link:
 					filtepisodes.insert(ind,link)
 			episodes=filtepisodes
 		return(episodes)
@@ -282,69 +284,77 @@ class VideoList():
 
 
 
+class SaveSub():
+	@staticmethod	
+	def cleantitle(title):
+		'''Cleans the title name from spaces and special characters.
+		'''
+		newway=re.sub('[^a-zA-Z0-9\n\.]', '_', title)
+		return newway
 
-
-
-def cleantitle(title):
-	'''Cleans the title name from spaces and special characters.
-	'''
-	newway=re.sub('[^a-zA-Z0-9\n\.]', '_', title)
-	return newway
-
-
-
-def getsublink(url,title,episode):
-	'''Downloads the Korean subtitles for the url. Returns the percentage number associated with the language as well.
-	It saves an srt file from the returned url from first part of the function.
-	Issues: Redirects are allowed, and I have no idea what kind of security problems this would create.
-	'''
-	url='/'.join(url.split('/')[2:])[4:]
-	dbase="http://downsub.com/?url=%s"
-	d="http://downsub.com/%s"
-	sub=requests.get(dbase %url)
-	soup=bs(sub.text,"html.parser")
-	#The texts are only download. To find which one in the list the Korean we have to search the soup again
-	sublinks=[link.get('href')[2:] for link in soup.find('div',id="show").find_all('a')]
-	ind=0
-	for lang in soup.find('div',id="show").text.split('\n')[1].split('>>')[1:]:
-		if lang.split()[1].strip()=='Korean':
-			break
-		ind+=1
-	try:
-		url=d %sublinks[ind]
-	except IndexError:
-		passed=False
-	else:
-		outname='%s_%d.srt' %(cleantitle(title),episode)
-		headers={'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_12_6) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/75.0.3770.100 Safari/537.36'}
-		srt=requests.get(url,allow_redirects=True,headers=headers)
-		passed=False
-		for head in srt.headers.values():
-			if 'srt' in head:
-				passed=True
+	def getsublink(self,url,title,episode):
+		'''Downloads the Korean subtitles for the url. Returns the percentage number associated with the language as well.
+		It saves an srt file from the returned url from first part of the function.
+		Issues: Redirects are allowed, and I have no idea what kind of security problems this would create.
+		'''
+		url='/'.join(url.split('/')[2:])[4:]
+		dbase="http://downsub.com/?url=%s"
+		d="http://downsub.com/%s"
+		sub=requests.get(dbase %url)
+		soup=bs(sub.text,"html.parser")
+		#The texts are only download. To find which one in the list the Korean we have to search the soup again
+		sublinks=[link.get('href')[2:] for link in soup.find('div',id="show").find_all('a')]
+		ind=0
+		percent=0.0
+		for lang in soup.find('div',id="show").text.split('\n')[1].split('>>')[1:]:
+			if lang.split()[1].strip()=='Korean':
+				percent=float(lang.split()[2].strip()[1:-2])
 				break
-		if passed:
-			with open(outname, 'wb') as f:
-				f.write(srt.content)
-	return(passed)
-
-def saveallsubs(vlinks):
-	saved={}
-	notsaved={}
-	partial={}
-	for title,links in vlinks.items():
-		passed=[]
-		nr=1
-		for link in links:
-			slink=getsublink(link,title,nr)
-			if slink:
-				passed.append(nr)
-			nr+=1
-		if len(links) == len(passed):
-			saved[title]=passed
-		elif len(passed) == 0:
-			notsaved[title]=passed
+			ind+=1
+		try:
+			url=d %sublinks[ind]
+		except IndexError:
+			passed=False
 		else:
-			partial[title]=passed
-	return(saved,partial,notsaved)
+			outname='%s_%d.srt' %(self.cleantitle(title),episode)
+			headers={'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_12_6) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/75.0.3770.100 Safari/537.36'}
+			srt=requests.get(url,allow_redirects=True,headers=headers)
+			passed=False
+			for head in srt.headers.values():
+				if 'srt' in head and percent != 0.0 :
+					passed=True
+					break
+			if passed:
+				with open(outname, 'wb') as f:
+					f.write(srt.content)
+		return(percent,passed)
+
+	def saveallsubs(self,vlinks):
+		subscomplete={'Title':[],'Subs':[]}
+		totalsubs={}
+		for title,links in vlinks.items():
+			tpercent=[]
+			passed=[]
+			nosubs=[]
+			nr=1
+			for link in links:
+				percent,slink=self.getsublink(link,title,nr)
+				if slink and percent != 0.0:
+					passed.append(nr)
+					tpercent.append(percent)
+				elif slink and percent == 0.0:
+					nosubs.append(nr)
+				else:
+					nosubs.append(nr)
+				nr+=1
+			try:
+				total=sum(tpercent)/len(links) #The percentage of subs that are present. Not that the tpercent is already in percantage
+			except ZeroDivisionError:
+				total=0.0
+			totalsubs[title]={'Percent_passed':tpercent,'Episode_passed':passed,'Nosubs':nosubs}
+			subscomplete['Title'].append(title)
+			subscomplete['Subs'].append(total)
+		self.subscomplete=pd.DataFrame(subscomplete)
+		self.detailedinfo=totalsubs
+		
 
