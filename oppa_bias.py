@@ -134,6 +134,8 @@ class VideoList():
 			if title == 'Stranger':
 				title=self.namechanges[title]
 				print('Drama Stranges was changed to %s' %title)
+			if title == 'You Who Came From the Stars':
+				title=self.namechanges[title]
 			title=re.sub("'","’",title)
 			sleep(3) #To prevent sending too many queries one after another
 			url=self.parsevikiurl(title)
